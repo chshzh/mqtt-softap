@@ -7,7 +7,7 @@
 cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(mqtt)
+project(mqtt_softapwifiprov)
 
 # Include files that are common for all modules
 add_subdirectory(src/common)
@@ -21,3 +21,6 @@ add_subdirectory(src/modules/error)
 
 # Optional modules
 add_subdirectory_ifdef(CONFIG_MQTT_SAMPLE_LED src/modules/led)
+
+# WiFi provisioning module (conditional)
+add_subdirectory_ifdef(CONFIG_MQTT_SAMPLE_WIFI_PROVISION src/modules/wifi_provision)

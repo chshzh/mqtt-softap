@@ -18,6 +18,7 @@ rsource "src/modules/network/Kconfig.network"
 rsource "src/modules/transport/Kconfig.transport"
 rsource "src/modules/error/Kconfig.error"
 rsource "src/modules/led/Kconfig.led"
+rsource "src/modules/wifi_provision/Kconfig.wifi_provision"
 
 endmenu
 

@@ -1,0 +1,52 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "WiFi Provisioning"
+	depends on WIFI_NRF70
+
+config MQTT_SAMPLE_WIFI_PROVISION
+	bool "Enable WiFi provisioning"
+	depends on WIFI_NRF70 && !NET_CONFIG_SETTINGS && !NET_CONFIG_AUTO_INIT
+	default y if WIFI_NRF70
+	default n
+	select SOFTAP_WIFI_PROVISION
+	select NANOPB
+	select NRF70_AP_MODE
+	select WIFI_NM_WPA_SUPPLICANT_AP
+	select SMF
+	select NET_DHCPV4_SERVER
+	select TLS_CREDENTIALS
+	select WIFI_CREDENTIALS
+	select HTTP_PARSER
+	select HTTP_PARSER_URL
+	select NET_SOCKETS_SOCKOPT_TLS
+	select HTTP_SERVER
+	help
+	  Enable WiFi provisioning using SoftAP mode.
+	  This allows the device to create a WiFi access point
+	  for provisioning WiFi credentials through a mobile app.
+	  
+	  Note: This feature requires WiFi hardware and is incompatible
+	  with NET_CONFIG_SETTINGS and NET_CONFIG_AUTO_INIT.
+
+if MQTT_SAMPLE_WIFI_PROVISION
+
+config MQTT_SAMPLE_WIFI_PROVISION_LOG_LEVEL
+	int "WiFi provisioning log level"
+	default 3
+	range 0 4
+	help
+	  Sets log level for WiFi provisioning module.
+	  Levels are:
+	  - 0 OFF, do not write
+	  - 1 ERROR, only write SYS_LOG_ERR
+	  - 2 WARNING, write SYS_LOG_WRN in addition to previous level
+	  - 3 INFO, write SYS_LOG_INF in addition to previous levels
+	  - 4 DEBUG, write SYS_LOG_DBG in addition to previous levels
+
+endif # MQTT_SAMPLE_WIFI_PROVISION
+
+endmenu # WiFi Provisioning 
