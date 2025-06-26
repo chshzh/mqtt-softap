@@ -1,0 +1,68 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# mqtt-softapwifiprov sample Quick Reference
+
+This file provides a quick reference for building, flashing, and debugging the `mqtt-softapwifiprov` sample.
+mqtt-softapwifiprov sample is modified from original nrf/samples/net/mqtt sample by adding softap wifi provisioning demoed by nrf/samples/wifi/provisioning/softap sample.
+
+## Building and Running
+
+### Basic Build Commands
+
+For **nRF7002 DK (non-secure)**:
+```zsh
+west build -p -b nrf7002dk/nrf5340/cpuapp/ns -- -DEXTRA_CONF_FILE=overlay-softap-wifiprov-nrf70.conf
+```
+
+For **nRF7002 DK (secure)**:
+```zsh
+west build -p -b nrf7002dk/nrf5340/cpuapp -- -DEXTRA_CONF_FILE=overlay-softap-wifiprov-nrf70.conf
+```
+
+### With TLS Support
+
+For TLS-enabled builds:
+```zsh
+# Non-secure with TLS
+west build -p -b nrf7002dk/nrf5340/cpuapp/ns -- -DEXTRA_CONF_FILE="overlay-softap-wifiprov-nrf70.conf;overlay-tls-nrf70.conf"
+
+# Secure with TLS
+west build -p -b nrf7002dk/nrf5340/cpuapp -- -DEXTRA_CONF_FILE="overlay-softap-wifiprov-nrf70.conf;overlay-tls-nrf70.conf"
+```
+
+### Flashing
+
+```zsh
+west flash --erase
+```
+
+## Testing
+
+Find the target device serial ports, normally the second one or bigger one like /dev/tty.usbmodem0010507692713 is the serial port used for log output.
+
+```zsh
+ls /dev/tty.usb*
+/dev/tty.usbmodem0010507692711  
+/dev/tty.usbmodem0010507692713
+```
+
+To capture device logs, run the following command. The sleep time may need to extended if not all log is captured.
+
+```zsh
+cd /opt/nordic/ncs/v3.0.2/mqtt-softapwifiprov && rm -f /opt/nordic/ncs/v3.0.2/mqtt-softapwifiprov/screenlog.0 && screen -L -S mqtt-softap-log -d -m /dev/tty.usbmodem0010507692713 115200 && nrfutil device reset --serial-number 1050769271 && sleep 10 && screen -S mqtt-softap-log -X quit && cat /opt/nordic/ncs/v3.0.2/mqtt-softapwifiprov/screenlog.0 
+```
+
+## Automated Debugging
+
+This section describes an automated debugging process that can be used to build, flash, and debug the `mqtt-softapwifiprov` sample. The process is as follows:
+
+1.  The firmware is built using the `west build` command, debug error if any are found.
+2.  The firmware is flashed to the device using the `west flash` command.
+3.  The device log is captured using the `screen` command.
+4.  The device is reset using the `nrfutil device reset` command.
+5.  The device log is analyzed for errors.
+6.  If there are any errors, the project code is modified to fix the errors.
+7.  The process is repeated until there are no errors.
