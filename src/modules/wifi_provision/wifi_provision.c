@@ -4,214 +4,226 @@
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
+#include <stdio.h>
+#include <errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/net/conn_mgr_connectivity.h>
-#include <zephyr/net/conn_mgr_monitor.h>
-#include <zephyr/net/net_mgmt.h>
+#include <zephyr/logging/log_ctrl.h>
+#include <zephyr/sys/reboot.h>
 #include <zephyr/net/wifi_mgmt.h>
-#include <zephyr/net/wifi_credentials.h>
-#include <zephyr/net/net_if.h>
-#include <zephyr/net/net_linkaddr.h>
-#include <zephyr/zbus/zbus.h>
+#include <zephyr/net/net_mgmt.h>
+#include <zephyr/net/net_event.h>
+#include <zephyr/net/conn_mgr_monitor.h>
+#include <zephyr/net/conn_mgr_connectivity.h>
+#include <zephyr/net/dhcpv4.h>
+#include <zephyr/drivers/gpio.h>
 #include <net/softap_wifi_provision.h>
-
-#include "wifi_provision.h"
+#include <zephyr/zbus/zbus.h>
 #include "message_channel.h"
 
-/* Register log module */
-LOG_MODULE_REGISTER(wifi_provision, CONFIG_MQTT_SAMPLE_WIFI_PROVISION_LOG_LEVEL);
+LOG_MODULE_REGISTER(wifi_provision, CONFIG_SOFTAP_WIFI_PROVISION_MODULE_LOG_LEVEL);
 
-/* WiFi provisioning state */
-static bool provisioning_active = false;
-static bool provisioning_completed = false;
 
-/* Network management event callback structures */
-static struct net_mgmt_event_callback wifi_cb;
-static struct net_mgmt_event_callback net_cb;
 
-/* Forward declarations */
-static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-				    uint32_t mgmt_event, struct net_if *iface);
-static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-				   uint32_t mgmt_event, struct net_if *iface);
+/* This module does not subscribe to any channels */
 
-/* WiFi provisioning event handler */
-static void provisioning_event_handler(const struct softap_wifi_provision_evt *evt)
+/* WiFi provisioning module - network events handled by network module */
+
+/* Macro called upon a fatal error, reboots the device. */
+#define FATAL_ERROR()								\
+	LOG_ERR("Fatal error!%s", IS_ENABLED(CONFIG_RESET_ON_FATAL_ERROR) ?	\
+				  " Rebooting the device" : "");		\
+	LOG_PANIC();								\
+	IF_ENABLED(CONFIG_REBOOT, (sys_reboot(0)))
+
+static bool wifi_provisioned = false;
+
+/* Network event handlers removed - handled by network module */
+
+/* Callback for softAP Wi-Fi provision library events. */
+static void softap_wifi_provision_handler(const struct softap_wifi_provision_evt *evt)
 {
+	int ret;
+	enum provisioning_status status;
+
 	switch (evt->type) {
 	case SOFTAP_WIFI_PROVISION_EVT_STARTED:
-		LOG_INF("WiFi provisioning started - entering SoftAP mode");
-		provisioning_active = true;
-		provisioning_completed = false;
+		LOG_INF("Provisioning started");
+		status = PROVISIONING_IN_PROGRESS;
+		ret = zbus_chan_pub(&PROVISIONING_CHAN, &status, K_SECONDS(1));
+		if (ret) {
+			LOG_ERR("Failed to publish provisioning status: %d", ret);
+		}
+		break;
+
+	case SOFTAP_WIFI_PROVISION_EVT_CLIENT_CONNECTED:
+		LOG_INF("Client connected");
+		break;
+
+	case SOFTAP_WIFI_PROVISION_EVT_CLIENT_DISCONNECTED:
+		LOG_INF("Client disconnected");
+		break;
+
+	case SOFTAP_WIFI_PROVISION_EVT_CREDENTIALS_RECEIVED:
+		LOG_INF("Wi-Fi credentials received");
 		break;
 
 	case SOFTAP_WIFI_PROVISION_EVT_COMPLETED:
-		LOG_INF("WiFi provisioning completed - switching from SoftAP to station mode");
-		provisioning_active = false;
-		provisioning_completed = true;
-		
-		/* Register NET management event handlers after provisioning completion */
-		LOG_INF("Registering NET management event handlers after provisioning completion");
-		net_mgmt_init_event_callback(&net_cb, net_mgmt_event_handler,
-					     NET_EVENT_L4_CONNECTED | NET_EVENT_L4_DISCONNECTED);
-		net_mgmt_add_event_callback(&net_cb);
-		LOG_DBG("NET management event handlers registered successfully");
+		LOG_INF("Provisioning completed");
+		wifi_provisioned = true;
+		status = PROVISIONING_COMPLETED;
+		ret = zbus_chan_pub(&PROVISIONING_CHAN, &status, K_SECONDS(1));
+		if (ret) {
+			LOG_ERR("Failed to publish provisioning completion: %d", ret);
+		}
+		LOG_INF("Network event callbacks registered");
+		break;
+
+	case SOFTAP_WIFI_PROVISION_EVT_UNPROVISIONED_REBOOT_NEEDED:
+		LOG_INF("Reboot request notified, rebooting...");
+		LOG_PANIC();
+		IF_ENABLED(CONFIG_REBOOT, (sys_reboot(0)));
 		break;
 
 	case SOFTAP_WIFI_PROVISION_EVT_FATAL_ERROR:
-		LOG_ERR("WiFi provisioning fatal error");
-		provisioning_active = false;
-		provisioning_completed = false;
-		SEND_FATAL_ERROR();
+		LOG_ERR("Provisioning failed, fatal error!");
+		FATAL_ERROR();
 		break;
 
 	default:
-		LOG_WRN("Unknown provisioning event: %d", evt->type);
-		break;
-	}
-
-	LOG_DBG("Provisioning state: active=%d, completed=%d", 
-		provisioning_active, provisioning_completed);
-}
-
-static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-				    uint32_t mgmt_event, struct net_if *iface)
-{
-	switch (mgmt_event) {
-	case NET_EVENT_WIFI_CONNECT_RESULT:
-		LOG_DBG("WiFi connect result event");
-		break;
-	case NET_EVENT_WIFI_DISCONNECT_RESULT:
-		LOG_DBG("WiFi disconnect result event");
-		break;
-	default:
-		break;
+		/* Don't care */
+		return;
 	}
 }
 
-static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-				   uint32_t mgmt_event, struct net_if *iface)
+static int wifi_power_saving_disable(void)
 {
-	int err;
-	enum network_status status;
+	int ret;
+	struct net_if *iface = net_if_get_first_wifi();
+	struct wifi_ps_params params = {
+		.enabled = WIFI_PS_DISABLED
+	};
 
-	/* Filter out events during active provisioning (SoftAP mode) */
-	if (provisioning_active) {
-		LOG_DBG("Ignoring network event during active provisioning: %u", mgmt_event);
-		return;
-	}
-
-	/* Filter events from non-WiFi interfaces */
-	if (iface && (net_if_get_link_addr(iface)->type != NET_LINK_ETHERNET)) {
-		LOG_DBG("Ignoring event from non-WiFi interface");
-		return;
-	}
-
-	switch (mgmt_event) {
-	case NET_EVENT_L4_CONNECTED:
-		LOG_INF("Network connected after provisioning");
-		status = NETWORK_CONNECTED;
-		break;
-	case NET_EVENT_L4_DISCONNECTED:
-		LOG_INF("Network disconnected");
-		status = NETWORK_DISCONNECTED;
-		break;
-	default:
-		/* Don't care about other events */
-		return;
-	}
-
-	/* Notify the network module */
-	err = zbus_chan_pub(&NETWORK_CHAN, &status, K_SECONDS(1));
-	if (err) {
-		LOG_ERR("zbus_chan_pub, error: %d", err);
-		SEND_FATAL_ERROR();
-	} else {
-		LOG_INF("Network connected after provisioning - notified network module");
-	}
-}
-
-int wifi_provision_init(void)
-{
-	int err;
-
-	LOG_INF("WiFi provisioning initialized, event handlers prepared but not registered");
-
-	/* Initialize WiFi management event callbacks (always register these) */
-	net_mgmt_init_event_callback(&wifi_cb, wifi_mgmt_event_handler,
-				     NET_EVENT_WIFI_CONNECT_RESULT |
-				     NET_EVENT_WIFI_DISCONNECT_RESULT);
-	net_mgmt_add_event_callback(&wifi_cb);
-
-	/* Initialize SoftAP WiFi provisioning */
-	err = softap_wifi_provision_init(provisioning_event_handler);
-	if (err) {
-		LOG_ERR("softap_wifi_provision_init failed: %d", err);
-		return err;
+	ret = net_mgmt(NET_REQUEST_WIFI_PS, iface, &params, sizeof(params));
+	if (ret) {
+		LOG_ERR("Failed to disable PSM, error: %d", ret);
+		FATAL_ERROR();
+		return ret;
 	}
 
 	return 0;
 }
 
-int wifi_provision_start(void)
+static int wifi_power_saving_enable(void)
 {
-	int err;
-	bool credentials_empty;
+	int ret;
+	struct net_if *iface = net_if_get_first_wifi();
+	struct wifi_ps_params params = {
+		.enabled = WIFI_PS_ENABLED
+	};
 
-	LOG_INF("Starting WiFi provisioning");
+	ret = net_mgmt(NET_REQUEST_WIFI_PS, iface, &params, sizeof(params));
+	if (ret) {
+		LOG_ERR("Failed to enable PSM, error: %d", ret);
+		FATAL_ERROR();
+		return ret;
+	}
 
-	/* Check if WiFi credentials already exist */
-	credentials_empty = wifi_credentials_is_empty();
+	return 0;
+}
 
-	if (!credentials_empty) {
+/* Function used to disable and re-enable PSM after a configured amount of time post provisioning.
+ * This is to ensure that the device is discoverable via mDNS so that clients can
+ * confirm that provisioning succeeded. This is needed due to mDNS SD being unstable
+ * in Power Save Mode.
+ */
+static void psm_set(void)
+{
+	int ret;
+
+	ret = wifi_power_saving_disable();
+	if (ret) {
+		LOG_ERR("wifi_power_saving_disable, error: %d", ret);
+		FATAL_ERROR();
+		return;
+	}
+
+	LOG_INF("PSM disabled");
+
+	k_sleep(K_SECONDS(CONFIG_SOFTAP_WIFI_PROVISION_MODULE_PSM_DISABLED_SECONDS));
+
+	ret = wifi_power_saving_enable();
+	if (ret) {
+		LOG_ERR("wifi_power_saving_enable, error: %d", ret);
+		FATAL_ERROR();		
+		return;
+	}
+
+	LOG_INF("PSM enabled");
+}
+
+static void wifi_provision_task(void)
+{
+	int ret;
+	bool provisioning_completed = false;
+
+	LOG_INF("SoftAP Wi-Fi provision sample started");
+
+	/* Publish initial provisioning status for LED indication */
+	enum provisioning_status initial_status = PROVISIONING_NOT_STARTED;
+	ret = zbus_chan_pub(&PROVISIONING_CHAN, &initial_status, K_SECONDS(1));
+	if (ret) {
+		LOG_ERR("Failed to publish initial provisioning status: %d", ret);
+	}
+
+
+
+	ret = softap_wifi_provision_init(softap_wifi_provision_handler);
+	if (ret) {
+		LOG_ERR("softap_wifi_provision_init, error: %d", ret);
+		FATAL_ERROR();
+		return;
+	}
+
+	ret = conn_mgr_all_if_up(true);
+	if (ret) {
+		LOG_ERR("conn_mgr_all_if_up, error: %d", ret);
+		FATAL_ERROR();
+		return;
+	}
+
+	LOG_INF("Network interface brought up");
+
+	ret = softap_wifi_provision_start();
+	switch (ret) {
+	case 0:
+		provisioning_completed = true;
+		break;
+	case -EALREADY:
 		LOG_INF("Wi-Fi credentials found, skipping provisioning");
 		provisioning_completed = true;
-		
-		/* Register NET management event handlers immediately */
-		LOG_INF("Registering NET management event handlers (provisioning skipped)");
-		net_mgmt_init_event_callback(&net_cb, net_mgmt_event_handler,
-					     NET_EVENT_L4_CONNECTED | NET_EVENT_L4_DISCONNECTED);
-		net_mgmt_add_event_callback(&net_cb);
-		
-		return 0; /* Credentials exist, no provisioning needed */
+		/* Notify network module that provisioning is complete */
+		enum provisioning_status status = PROVISIONING_COMPLETED;
+		ret = zbus_chan_pub(&PROVISIONING_CHAN, &status, K_SECONDS(1));
+		if (ret) {
+			LOG_ERR("Failed to publish provisioning completion: %d", ret);
+		}
+		break;
+	default:
+		LOG_ERR("softap_wifi_provision_start, error: %d", ret);
+		FATAL_ERROR();
+		return;
 	}
 
-	/* Start provisioning */
-	err = softap_wifi_provision_start();
-	if (err) {
-		LOG_ERR("softap_wifi_provision_start failed: %d", err);
-		return err;
+	/* Network connection will be handled by the network module after
+	 * it receives the provisioning completion notification */
+
+	if (provisioning_completed) {
+		psm_set();
 	}
-
-	return 1; /* Provisioning started */
+    return;
 }
 
-int wifi_provision_reset(void)
-{
-	int err;
-
-	LOG_INF("Resetting WiFi credentials");
-
-	err = wifi_credentials_delete_all();
-	if (err) {
-		LOG_ERR("Failed to delete WiFi credentials: %d", err);
-		return err;
-	}
-
-	provisioning_active = false;
-	provisioning_completed = false;
-
-	LOG_INF("WiFi credentials reset successfully");
-	return 0;
-}
-
-bool wifi_provision_is_active(void)
-{
-	return provisioning_active;
-}
-
-bool wifi_provision_is_completed(void)
-{
-	return provisioning_completed;
-} 
+// Set higher priority than network module 
+K_THREAD_DEFINE(wifi_provision_thread, 8192, wifi_provision_task, NULL, NULL, NULL,
+		2, 0, 0);

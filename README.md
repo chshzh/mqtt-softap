@@ -36,7 +36,7 @@ The sample combines two main functionalities:
 1. **WiFi Provisioning**: Uses SoftAP mode to allow mobile clients to provision WiFi credentials
 2. **MQTT Communication**: Connects to an MQTT broker to publish and receive messages
 
-After boot, the device starts advertising in SoftAP mode with the SSID name set by the `CONFIG_SOFTAP_WIFI_PROVISION_SSID` option (default is *nrf-wifiprov*), allowing clients (STA) to connect to it and provide Wi-Fi credentials. Once provisioned, the device automatically connects to the configured WiFi network and begins MQTT operations.
+After boot, the device starts advertising in SoftAP mode with the SSID name set by the `CONFIG_SOFTAP_WIFI_PROVISION_MODULE_SSID` option (default is *nrf-wifiprov*), allowing clients (STA) to connect to it and provide Wi-Fi credentials. Once provisioned, the device automatically connects to the configured WiFi network and begins MQTT operations.
 
 ### Key Features
 
@@ -78,23 +78,26 @@ Modules communicate through a ZBus-based message channel system, providing:
 
 ### LEDs
 
-- **LED 1**: Turns on when the device is advertising the SoftAP network (provisioning mode)
-- **LED 2**: Turns on when the device is connected to the provisioned WiFi network
+- **LED 1**: Network connectivity status. Turns **on** when connected to internet (MQTT-ready), **off** when disconnected.
+- **LED 2**: WiFi provisioning status:
+  - **Fast blink** (200ms): Waiting for WiFi connection (initial state)
+  - **Slow blink** (1000ms): Provisioning in progress (SoftAP mode active)
+  - **Solid on**: Connected to provisioned WiFi network
 
 ### Buttons
-
-- **Button 1**: Press to reset stored WiFi credentials and restart provisioning
+- **Button 1** (sw0): Publish test MQTT message when MQTT broker is connected.
+- **Button 2** (sw1): Reset stored WiFi credentials and restart provisioning (device reboots).
 
 ## Building and Running
 
 ### Basic Build Commands
 
-For **nRF7002 DK (non-secure)** - ✅ **Tested and Working**:
+For **nRF7002 DK (secure)** - ✅ **Tested and Working**:
 ```bash
 west build -p -b nrf7002dk/nrf5340/cpuapp/ns -- -DEXTRA_CONF_FILE=overlay-softap-wifiprov-nrf70.conf
 ```
 
-For **nRF7002 DK (secure)** - ✅ **Tested and Working**:
+For **nRF7002 DK (non-secure)** - ✅ **Tested and Working**:
 ```bash
 west build -p -b nrf7002dk/nrf5340/cpuapp -- -DEXTRA_CONF_FILE=overlay-softap-wifiprov-nrf70.conf
 ```
@@ -110,19 +113,10 @@ west build -p -b nrf7002dk/nrf5340/cpuapp/ns -- -DEXTRA_CONF_FILE="overlay-softa
 west build -p -b nrf7002dk/nrf5340/cpuapp -- -DEXTRA_CONF_FILE="overlay-softap-wifiprov-nrf70.conf;overlay-tls-nrf70.conf"
 ```
 
-### Memory Usage
-
-The sample has been optimized for memory efficiency:
-
-| Target | Flash Usage | RAM Usage | Status |
-|--------|-------------|-----------|---------|
-| **nrf7002dk/nrf5340/cpuapp/ns** | 735,756B / 848KB (84.73%) | 200,889B / 400KB (49.05%) | ✅ Working |
-| **nrf7002dk/nrf5340/cpuapp** | 793,124B / 960KB (80.68%) | 208,025B / 448KB (45.35%) | ✅ Working |
-
 ### Flashing
 
 ```bash
-west flash
+west flash --erase
 ```
 
 ## Testing
@@ -130,33 +124,67 @@ west flash
 ### Method 1: Using Mobile App (Recommended)
 
 1. **Flash the sample** to your nRF7002 DK
-2. **Power on** the device and observe the following output:
+2. **Power on** the device and observe:
 
+   **LED Behavior:**
+   - **LED 2** starts **fast blinking** (waiting for WiFi connection)
+   
+   **Console Output:**
    ```
-   *** Using Zephyr OS v4.0.99-ncs1 ***
-   [00:00:00.587,036] <inf> network: Network task started - using Nordic's exact SoftAP logic
-   [00:00:00.597,900] <dbg> softap_wifi_provision: init_entry: Registering self-signed server certificate
-   [00:00:00.708,892] <inf> network: Network interface brought up
-   [00:00:00.753,021] <dbg> softap_wifi_provision: wifi_scan: Scanning for Wi-Fi networks...
-   [00:00:05.615,661] <dbg> softap_wifi_provision: provisioning_entry: Enabling AP mode to allow client to connect and provide Wi-Fi credentials.
-   [00:00:06.320,953] <inf> network: Provisioning started
+*** Booting nRF Connect SDK v3.0.2-89ba1294ac9b ***
+*** Using Zephyr OS v4.0.99-f791c49f492c ***
+[00:00:00.656,402] <inf> wifi_supplicant: wpa_supplicant initialized
+[00:00:00.663,635] <inf> wifi_provision: SoftAP Wi-Fi provision sample started
+[00:00:00.671,325] <dbg> softap_wifi_provision: init_entry: Registering self-signed server certificate
+[00:00:08.776,000] <dbg> softap_wifi_provision: certificate_register: Self-signed server certificate provisioned
+[00:00:08.786,529] <inf> network: Waiting for WiFi provisioning to complete
+[00:00:08.794,250] <inf> ui: UI module started
+[00:00:08.799,102] <inf> ui: LED 1 initialized (network status)
+[00:00:08.805,389] <inf> ui: LED 2 initialized (provisioning status)
+[00:00:08.812,133] <inf> ui: Button 1 initialized (MQTT publish)
+[00:00:08.818,542] <inf> ui: Button 2 initialized (credential reset)
+[00:00:08.875,061] <inf> wifi_provision: Network interface brought up
+[00:00:08.882,781] <dbg> softap_wifi_provision: process_tcp4: Waiting for IPv4 HTTP connections on port 443
+[00:00:08.893,005] <dbg> softap_wifi_provision: wifi_scan: Scanning for Wi-Fi networks...
+[00:00:13.530,212] <dbg> softap_wifi_provision: net_mgmt_wifi_event_handler: NET_EVENT_WIFI_SCAN_DONE
+[00:00:13.540,008] <dbg> softap_wifi_provision: unprovisioned_exit: Scanning for Wi-Fi networks completed, preparing protobuf payload
+[00:00:13.553,222] <dbg> softap_wifi_provision: unprovisioned_exit: Protobuf payload prepared, scan results encoded, size: 191
+[00:00:13.564,941] <dbg> softap_wifi_provision: provisioning_entry: Enabling AP mode to allow client to connect and provide Wi-Fi credentials.
+[00:00:13.578,094] <dbg> softap_wifi_provision: provisioning_entry: Waiting for Wi-Fi credentials...
+[00:00:15.480,743] <dbg> softap_wifi_provision: net_mgmt_wifi_event_handler: NET_EVENT_WIFI_AP_ENABLE_RESULT
+[00:00:15.492,401] <inf> wifi_provision: Provisioning started
+[00:00:15.499,511] <inf> network: Provisioning in progress, blocking network events
+[00:00:15.507,843] <inf> network: L4 connected during provisioning (SoftAP mode) - not publishing network event
+[00:00:15.518,341] <dbg> softap_wifi_provision: dhcp_server_start: IPv4 address added to interface
+[00:00:15.527,648] <dbg> softap_wifi_provision: dhcp_server_start: IPv4 netmask set
+[00:00:15.536,010] <dbg> softap_wifi_provision: dhcp_server_start: DHCPv4 server started
+[00:00:15.544,464] <inf> ui: Provisioning status changed to: 1
    ```
 
-3. **Observe LED 1** turning on, indicating provisioning mode
+1. **Observe LED behavior changes:**
+   - **LED 2** changes to **slow blinking** (provisioning mode active)
+   - **LED 1** remains **off** (no network connection yet)
 
-4. **Download** the nRF Wi-Fi Provisioner mobile app:
+2. **Download** the nRF Wi-Fi Provisioner mobile app:
    - [Android](https://play.google.com/store/apps/details?id=no.nordicsemi.android.wifi.provisioner)
    - [iOS](https://apps.apple.com/app/nrf-wi-Fi-provisioner/id1638948698)
 
-5. **Connect** your mobile device to the SoftAP network:
+3. **Connect** your mobile device to the SoftAP network:
    - SSID: `nrf-wifiprov` (configurable)
    - Password: None (open network by default)
 
-6. **Open** the provisioning app and follow the setup wizard
+4. **Open** the provisioning app and follow the setup wizard
 
-7. **Provide** your WiFi network credentials through the app
+5. **Provide** your WiFi network credentials through the app
 
-8. **Observe LED 2** turning on once connected to your WiFi network
+6. **Observe successful connection:**
+   - **LED 2** turns **solid on** (connected to provisioned WiFi)
+   - **LED 1** turns **on** (internet connectivity established, MQTT ready)
+   - Console shows MQTT connection and subscription messages
+
+7. **Test MQTT functionality:**
+   - **Press Button 1** (sw0) to publish a test message to MQTT broker
+   - **Press Button 2** (sw1) to reset WiFi credentials and restart provisioning (device reboots)
 
 ### Method 2: Using Python Script
 
@@ -187,7 +215,10 @@ Alternatively, you can use the provided Python script:
    Configuration successful!
    ```
 
-4. **Observe** the device connecting to the selected network and starting MQTT operations
+4. **Observe** the device connecting to the selected network:
+   - **LED 2** turns **solid on** (connected to provisioned WiFi)
+   - **LED 1** turns **on** (internet connectivity, MQTT ready)
+   - MQTT operations start automatically
 
 ### MQTT Testing
 
@@ -195,11 +226,21 @@ Alternatively, you can use the provided Python script:
 
 2. **Connect** to the same broker (default: `test.mosquitto.org`)
 
-3. **Subscribe** to the topic: `<clientID>/my/subscribe/topic`
+3. **Subscribe** to the topic: `<clientID>/my/publish/topic` to receive device messages
 
-4. **Publish** messages to: `<clientID>/my/publish/topic`
+4. **Test Button 1 functionality:**
+   - **Press Button 1** (sw0) on the nRF7002 DK
+   - **Observe** a test message published: `"Button 1 pressed at <timestamp>"`
+   - **LED 1** should be **on** (indicating MQTT connection)
 
-5. **Observe** bidirectional message flow
+5. **Publish** messages to: `<clientID>/my/subscribe/topic` to send messages to device
+
+6. **Test Button 2 functionality:**
+   - **Press Button 2** (sw1) to reset WiFi credentials
+   - **Device reboots** and enters provisioning mode again
+   - **LED 2** starts **fast blinking** (waiting for new WiFi connection)
+
+7. **Observe** bidirectional message flow and LED status indicators
 
 ## Configuration
 
@@ -214,7 +255,7 @@ Alternatively, you can use the provided Python script:
 
 #### WiFi Provisioning Options
 
-- `CONFIG_MQTT_SAMPLE_WIFI_PROVISION`: Enable/disable WiFi provisioning
+- `CONFIG_SOFTAP_WIFI_PROVISION`: Enable/disable WiFi provisioning
 - `CONFIG_SOFTAP_WIFI_PROVISION_SSID`: SoftAP SSID (default: `nrf-wifiprov`)
 - `CONFIG_SOFTAP_WIFI_PROVISION_PASSWORD`: SoftAP password (optional)
 - `CONFIG_SOFTAP_WIFI_PROVISION_THREAD_STACK_SIZE`: SoftAP thread stack size (default: 8192)
@@ -320,103 +361,6 @@ This sample uses the following libraries and subsystems:
 - **Mbed TLS** (`CONFIG_MBEDTLS`): Cryptographic operations and TLS support
 - **nanopb** (`CONFIG_NANOPB`): Protocol buffer implementation
 - **HTTP Parser** (`CONFIG_HTTP_PARSER`): HTTP request/response parsing
-
-## Troubleshooting
-
-### Common Issues
-
-#### Build Errors
-
-**Problem**: `CONFIG_MQTT_SAMPLE_WIFI_PROVISION` undefined
-**Solution**: Ensure the WiFi provisioning module is properly configured in Kconfig
-
-**Problem**: Memory overflow during linking
-**Solution**: Use memory optimization overlays or reduce feature set
-
-**Problem**: TLS certificate errors
-**Solution**: Ensure certificates are properly generated and placed in the certs folder
-
-#### Runtime Issues
-
-**Problem**: Device doesn't enter provisioning mode
-**Solution**: Press Button 1 to reset credentials and restart provisioning
-
-**Problem**: Cannot connect to SoftAP
-**Solution**: Check SoftAP SSID configuration and mobile device WiFi settings
-
-**Problem**: "Failed to set beacon data" error
-**Solution**: This is a known issue with the SoftAP library's channel selection. The device will retry automatically.
-
-**Problem**: MQTT connection fails
-**Solution**: Verify broker hostname, port, and network connectivity
-
-**Problem**: TLS handshake failures
-**Solution**: Check certificate configuration and server name indication (SNI) settings
-
-#### Certificate Issues
-
-If you change the hostname using `CONFIG_NET_HOSTNAME`, the server certificate must be regenerated with the Subject Alternate Name (SAN) field set to the new hostname to ensure Server Name Indication (SNI) succeeds during the TLS handshake.
-
-### Debug Logging
-
-Enable debug logging for specific modules:
-
-```bash
-# WiFi provisioning debug
-west build -- -DCONFIG_SOFTAP_WIFI_PROVISION_LOG_LEVEL_DBG=y
-
-# MQTT debug
-west build -- -DCONFIG_MQTT_HELPER_LOG_LEVEL_DBG=y
-
-# General networking debug
-west build -- -DCONFIG_LOG_DEFAULT_LEVEL=4
-```
-
-### Memory Optimization
-
-For memory-constrained builds, use these optimizations:
-
-```conf
-CONFIG_LOG_MODE_MINIMAL=y
-CONFIG_SIZE_OPTIMIZATIONS=y
-CONFIG_NET_IPV6=n
-CONFIG_ASSERT=n
-CONFIG_LTO=y
-CONFIG_ISR_TABLES_LOCAL_DECLARATION=y
-```
-
-## Sample Output
-
-### Successful Provisioning and MQTT Connection
-
-```
-*** Booting nRF Connect SDK v3.0.2-89ba1294ac9b ***
-*** Using Zephyr OS v4.0.99-f791c49f492c ***
-[00:00:00.587,036] <inf> network: Network task started - using Nordic's exact SoftAP logic
-[00:00:00.597,900] <dbg> softap_wifi_provision: init_entry: Registering self-signed server certificate
-[00:00:00.708,892] <inf> network: Network interface brought up
-[00:00:00.753,021] <dbg> softap_wifi_provision: wifi_scan: Scanning for Wi-Fi networks...
-[00:00:05.615,661] <dbg> softap_wifi_provision: provisioning_entry: Enabling AP mode to allow client to connect and provide Wi-Fi credentials.
-[00:00:06.320,953] <inf> network: Provisioning started
-[00:00:14.054,565] <dbg> softap_wifi_provision: dhcp_server_start: DHCPv4 server started
-
-# Client connects and provides credentials
-[00:01:18.950,469] <dbg> softap_wifi_provision: print_mac: Client STA connected, MAC: 04:00:91:9E:31:EA
-[00:01:18.960,174] <inf> network: Client connected
-[00:00:37.468,536] <inf> network: Wi-Fi credentials received
-[00:00:38.728,881] <inf> network: Provisioning completed
-
-# Device connects to WiFi and starts MQTT
-[00:00:40.389,312] <inf> network: Network connected
-[00:00:45.123] <inf> transport: Connected to MQTT broker
-[00:00:45.124] <inf> transport: Hostname: test.mosquitto.org
-[00:00:45.125] <inf> transport: Client ID: A1B2C3D4E5F6
-[00:00:45.126] <inf> transport: Port: 1883
-[00:00:45.189] <inf> transport: Subscribed to topic A1B2C3D4E5F6/my/subscribe/topic
-[00:01:45.234] <inf> transport: Publishing message: "Hello MQTT! Uptime: 105234ms"
-```
-
----
 
 ## License
 

@@ -30,7 +30,7 @@ ZBUS_CHAN_DEFINE(NETWORK_CHAN,
 		 enum network_status,
 		 NULL,
 		 NULL,
-		 ZBUS_OBSERVERS(transport IF_ENABLED(CONFIG_MQTT_SAMPLE_LED, (, led)), sampler),
+		 ZBUS_OBSERVERS(transport IF_ENABLED(CONFIG_MQTT_SAMPLE_LED, (, ui)), sampler),
 		 ZBUS_MSG_INIT(0)
 );
 
@@ -39,5 +39,21 @@ ZBUS_CHAN_DEFINE(FATAL_ERROR_CHAN,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS(error),
+		 ZBUS_MSG_INIT(0)
+);
+
+ZBUS_CHAN_DEFINE(PROVISIONING_CHAN,
+		 enum provisioning_status,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS(network IF_ENABLED(CONFIG_MQTT_SAMPLE_LED, (, ui))),
+		 ZBUS_MSG_INIT(0)
+);
+
+ZBUS_CHAN_DEFINE(TRANSPORT_CHAN,
+		 enum transport_status,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS(IF_ENABLED(CONFIG_MQTT_SAMPLE_LED, (ui))),
 		 ZBUS_MSG_INIT(0)
 );

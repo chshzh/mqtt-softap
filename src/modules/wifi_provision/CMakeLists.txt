@@ -1,10 +1,7 @@
 #
-# Copyright (c) 2024 Nordic Semiconductor ASA
+# Copyright (c) 2025 Nordic Semiconductor ASA
 #
 # SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
-# Include common headers
-target_include_directories(app PRIVATE ../../common)
-
-target_sources(app PRIVATE wifi_provision.c) 
+target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/wifi_provision.c)

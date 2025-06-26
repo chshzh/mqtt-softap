@@ -1,52 +1,30 @@
 #
-# Copyright (c) 2025 Nordic Semiconductor
+# Copyright (c) 2025 Nordic Semiconductor ASA
 #
 # SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
-menu "WiFi Provisioning"
-	depends on WIFI_NRF70
-
-config MQTT_SAMPLE_WIFI_PROVISION
-	bool "Enable WiFi provisioning"
-	depends on WIFI_NRF70 && !NET_CONFIG_SETTINGS && !NET_CONFIG_AUTO_INIT
-	default y if WIFI_NRF70
+config SOFTAP_WIFI_PROVISION_MODULE
+	bool "WiFi provisioning module"
 	default n
 	select SOFTAP_WIFI_PROVISION
-	select NANOPB
-	select NRF70_AP_MODE
-	select WIFI_NM_WPA_SUPPLICANT_AP
-	select SMF
-	select NET_DHCPV4_SERVER
-	select TLS_CREDENTIALS
-	select WIFI_CREDENTIALS
-	select HTTP_PARSER
-	select HTTP_PARSER_URL
-	select NET_SOCKETS_SOCKOPT_TLS
-	select HTTP_SERVER
+	select NET_CONNECTION_MANAGER
 	help
-	  Enable WiFi provisioning using SoftAP mode.
-	  This allows the device to create a WiFi access point
-	  for provisioning WiFi credentials through a mobile app.
-	  
-	  Note: This feature requires WiFi hardware and is incompatible
-	  with NET_CONFIG_SETTINGS and NET_CONFIG_AUTO_INIT.
+	  Enable softAP WiFi provisioning functionality for the MQTT sample.
+	  This allows the device to create a WiFi access point for provisioning
+	  network credentials.
 
-if MQTT_SAMPLE_WIFI_PROVISION
+if SOFTAP_WIFI_PROVISION_MODULE
 
-config MQTT_SAMPLE_WIFI_PROVISION_LOG_LEVEL
-	int "WiFi provisioning log level"
-	default 3
-	range 0 4
+config SOFTAP_WIFI_PROVISION_MODULE_PSM_DISABLED_SECONDS
+	int "PSM disabled time after provisioning (seconds)"
+	default 120
 	help
-	  Sets log level for WiFi provisioning module.
-	  Levels are:
-	  - 0 OFF, do not write
-	  - 1 ERROR, only write SYS_LOG_ERR
-	  - 2 WARNING, write SYS_LOG_WRN in addition to previous level
-	  - 3 INFO, write SYS_LOG_INF in addition to previous levels
-	  - 4 DEBUG, write SYS_LOG_DBG in addition to previous levels
+	  Time in seconds to keep PSM disabled after successful provisioning
+	  to ensure mDNS service discovery works properly.
 
-endif # MQTT_SAMPLE_WIFI_PROVISION
+module = SOFTAP_WIFI_PROVISION_MODULE
+module-str = WiFi Provision
+source "subsys/logging/Kconfig.template.log_config"
 
-endmenu # WiFi Provisioning 
+endif # SOFTAP_WIFI_PROVISION_MODULE 

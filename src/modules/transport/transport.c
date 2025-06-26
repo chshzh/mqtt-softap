@@ -8,6 +8,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/smf.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/printk.h>
 #include <net/mqtt_helper.h>
 
 #include "client_id.h"
@@ -18,6 +20,9 @@ LOG_MODULE_REGISTER(transport, CONFIG_MQTT_SAMPLE_TRANSPORT_LOG_LEVEL);
 
 /* Register subscriber */
 ZBUS_SUBSCRIBER_DEFINE(transport, CONFIG_MQTT_SAMPLE_TRANSPORT_MESSAGE_QUEUE_SIZE);
+
+/* Forward declaration for publish function */
+static void publish(struct payload *payload);
 
 /* ID for subscribe topic - Used to verify that a subscription succeeded in on_mqtt_suback(). */
 #define SUBSCRIBE_TOPIC_ID 2469
@@ -71,12 +76,26 @@ static void on_mqtt_connack(enum mqtt_conn_return_code return_code, bool session
 {
 	ARG_UNUSED(return_code);
 
+	/* Publish transport connected status */
+	enum transport_status status = TRANSPORT_CONNECTED;
+	int ret = zbus_chan_pub(&TRANSPORT_CHAN, &status, K_SECONDS(1));
+	if (ret) {
+		LOG_ERR("Failed to publish transport status: %d", ret);
+	}
+
 	smf_set_state(SMF_CTX(&s_obj), &state[MQTT_CONNECTED]);
 }
 
 static void on_mqtt_disconnect(int result)
 {
 	ARG_UNUSED(result);
+
+	/* Publish transport disconnected status */
+	enum transport_status status = TRANSPORT_DISCONNECTED;
+	int ret = zbus_chan_pub(&TRANSPORT_CHAN, &status, K_SECONDS(1));
+	if (ret) {
+		LOG_ERR("Failed to publish transport status: %d", ret);
+	}
 
 	smf_set_state(SMF_CTX(&s_obj), &state[MQTT_DISCONNECTED]);
 }
@@ -336,6 +355,8 @@ static void transport_task(void)
 		SEND_FATAL_ERROR();
 		return;
 	}
+
+
 
 	/* Set initial state */
 	smf_set_initial(SMF_CTX(&s_obj), &state[MQTT_DISCONNECTED]);

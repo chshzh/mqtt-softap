@@ -20,7 +20,7 @@ add_subdirectory(src/modules/transport)
 add_subdirectory(src/modules/error)
 
 # Optional modules
-add_subdirectory_ifdef(CONFIG_MQTT_SAMPLE_LED src/modules/led)
+add_subdirectory_ifdef(CONFIG_MQTT_SAMPLE_LED src/modules/ui)
 
 # WiFi provisioning module (conditional)
-add_subdirectory_ifdef(CONFIG_MQTT_SAMPLE_WIFI_PROVISION src/modules/wifi_provision)
+add_subdirectory_ifdef(CONFIG_SOFTAP_WIFI_PROVISION_MODULE src/modules/wifi_provision)
